@@ -38,12 +38,21 @@ func (e *env) AddRecipient(rcpt smtpd.MailAddress) error {
 }
 
 func (e *env) BeginData() error {
+	log.Printf("Processing new mail from %q", e.from.Email())
+
+	if len(e.rcpts) == 0 {
+		return smtpd.SMTPError("554 5.5.1 Error: no valid recipients")
+	}
+
 	for _, r := range e.rcpts {
+		log.Printf("%q == %q", r.Hostname(), e.host)
 		if r.Hostname() == e.host {
+			log.Printf("Found %s", r.Email())
 			e.to = r.Email()
 			return nil
 		}
 	}
+
 	return smtpd.SMTPError("554 5.5.1 Error: no valid recipients")
 }
 
@@ -87,6 +96,10 @@ func main() {
 	flag.StringVar(&opts.dir, "dir", "", "Directory to log messages to")
 	flag.StringVar(&opts.host, "host", "", "Hostname to accept")
 	flag.Parse()
+
+	if opts.host == "" {
+		log.Panicln("No host set")
+	}
 
 	s := smtpd.Server{
 		Addr: opts.addr,

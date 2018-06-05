@@ -63,9 +63,14 @@ func (e *env) Write(line []byte) error {
 
 func (e *env) Close() error {
 	if err := os.Mkdir(e.path(), 0755); err != nil {
+		log.Panicln(err)
 		return err
 	}
-	return ioutil.WriteFile(e.filename(), e.body.Bytes(), 0644)
+	if err := ioutil.WriteFile(e.filename(), e.body.Bytes(), 0644); err != nil {
+		log.Panicln(err)
+		return err
+	}
+	return nil
 }
 
 func (e *env) path() string {

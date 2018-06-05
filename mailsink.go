@@ -42,7 +42,7 @@ func (e *env) BeginData() error {
 }
 
 func (e *env) Write(line []byte) error {
-	_, err := fmt.Fprint(e.body, string(line))
+	_, err := e.body.Write(line)
 	return err
 }
 
@@ -57,14 +57,16 @@ type fileLogger struct {
 	path string
 }
 
-func (f fileLogger) New() (io.WriteCloser, error) {
-	path := filepath.Join(f.path, time.Now().UTC().Format(time.RFC3339Nano))
+func (f fileLogger) New(from smtpd.MailAddress) (io.WriteCloser, error) {
+	path := filepath.Join(f.path, time.Now().UTC().Format(time.RFC3339), "_", from.Email())
 	return os.Create(path)
 }
 
-func stdoutLogger() (io.WriteCloser, error) {
+func stdoutLogger(smtpd.MailAddress) (io.WriteCloser, error) {
 	return new(buf), nil
 }
+
+type logFunc func(from smtpd.MailAddress) (io.WriteCloser, error)
 
 func main() {
 	opts := struct {
@@ -76,7 +78,7 @@ func main() {
 	flag.StringVar(&opts.dir, "dir", "", "Directory to log messages to")
 	flag.Parse()
 
-	var newBodyFunc func() (io.WriteCloser, error) = stdoutLogger
+	var newBodyFunc logFunc = stdoutLogger
 	if opts.dir != "" {
 		fl := fileLogger{opts.dir}
 		newBodyFunc = fl.New
@@ -85,7 +87,7 @@ func main() {
 	s := smtpd.Server{
 		Addr: opts.addr,
 		OnNewMail: func(c smtpd.Connection, from smtpd.MailAddress) (smtpd.Envelope, error) {
-			body, err := newBodyFunc()
+			body, err := newBodyFunc(from)
 			return &env{
 				from: from,
 				body: body,

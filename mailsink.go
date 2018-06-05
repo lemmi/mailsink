@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -23,9 +23,13 @@ func (b buf) Close() error {
 }
 
 type env struct {
+	dir  string
+	host string
+
 	from  smtpd.MailAddress
 	rcpts []smtpd.MailAddress
-	body  io.WriteCloser
+	to    string
+	body  bytes.Buffer
 }
 
 func (e *env) AddRecipient(rcpt smtpd.MailAddress) error {
@@ -34,11 +38,13 @@ func (e *env) AddRecipient(rcpt smtpd.MailAddress) error {
 }
 
 func (e *env) BeginData() error {
-	if len(e.rcpts) == 0 {
-		return smtpd.SMTPError("554 5.5.1 Error: no valid recipients")
+	for _, r := range e.rcpts {
+		if r.Hostname() == e.host {
+			e.to = r.Email()
+			return nil
+		}
 	}
-
-	return nil
+	return smtpd.SMTPError("554 5.5.1 Error: no valid recipients")
 }
 
 func (e *env) Write(line []byte) error {
@@ -47,52 +53,49 @@ func (e *env) Write(line []byte) error {
 }
 
 func (e *env) Close() error {
-	if b, ok := e.body.(fmt.Stringer); ok {
-		fmt.Println(b.String())
+	if err := os.Mkdir(e.path(), 0755); err != nil {
+		return err
 	}
-	return e.body.Close()
+	return ioutil.WriteFile(e.filename(), e.body.Bytes(), 0644)
 }
 
-type fileLogger struct {
-	path string
+func (e *env) path() string {
+	return filepath.Join(e.dir, e.to)
+}
+func (e *env) filename() string {
+	return fmt.Sprintf("%s_%s.eml", time.Now().UTC().Format(time.RFC3339), e.from.Email())
+}
+func (e *env) filepath() string {
+	return filepath.Join(e.path(), e.filename())
 }
 
-func (f fileLogger) New(from smtpd.MailAddress) (io.WriteCloser, error) {
-	filename := fmt.Sprintf("%s_%s.eml", time.Now().UTC().Format(time.RFC3339), from.Email())
-	path := filepath.Join(f.path, filename)
-	return os.Create(path)
+type Config struct {
+	Address string
+	Dir     string
+	Host    string
+	//Whitelist []string
 }
-
-func stdoutLogger(smtpd.MailAddress) (io.WriteCloser, error) {
-	return new(buf), nil
-}
-
-type logFunc func(from smtpd.MailAddress) (io.WriteCloser, error)
 
 func main() {
 	opts := struct {
 		addr string
 		dir  string
+		host string
 	}{}
 
 	flag.StringVar(&opts.addr, "addr", ":2525", "Address to listen on")
 	flag.StringVar(&opts.dir, "dir", "", "Directory to log messages to")
+	flag.StringVar(&opts.host, "host", "", "Hostname to accept")
 	flag.Parse()
-
-	var newBodyFunc logFunc = stdoutLogger
-	if opts.dir != "" {
-		fl := fileLogger{opts.dir}
-		newBodyFunc = fl.New
-	}
 
 	s := smtpd.Server{
 		Addr: opts.addr,
 		OnNewMail: func(c smtpd.Connection, from smtpd.MailAddress) (smtpd.Envelope, error) {
-			body, err := newBodyFunc(from)
 			return &env{
 				from: from,
-				body: body,
-			}, err
+				dir:  opts.dir,
+				host: opts.host,
+			}, nil
 		},
 	}
 	err := s.ListenAndServe()

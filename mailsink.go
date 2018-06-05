@@ -57,6 +57,7 @@ func (e *env) BeginData() error {
 }
 
 func (e *env) Write(line []byte) error {
+	fmt.Println("<", string(line))
 	_, err := e.body.Write(line)
 	return err
 }
@@ -68,6 +69,7 @@ func (e *env) Close() error {
 			return err
 		}
 	}
+	fmt.Println(e.body.String())
 	if err := ioutil.WriteFile(e.filename(), e.body.Bytes(), 0644); err != nil {
 		log.Panicln(err)
 		return err

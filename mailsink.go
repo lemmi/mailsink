@@ -63,8 +63,10 @@ func (e *env) Write(line []byte) error {
 
 func (e *env) Close() error {
 	if err := os.Mkdir(e.path(), 0755); err != nil {
-		log.Panicln(err)
-		return err
+		if !os.IsExist(err) {
+			log.Panicln(err)
+			return err
+		}
 	}
 	if err := ioutil.WriteFile(e.filename(), e.body.Bytes(), 0644); err != nil {
 		log.Panicln(err)

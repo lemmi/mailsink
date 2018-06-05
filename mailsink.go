@@ -58,7 +58,8 @@ type fileLogger struct {
 }
 
 func (f fileLogger) New(from smtpd.MailAddress) (io.WriteCloser, error) {
-	path := filepath.Join(f.path, time.Now().UTC().Format(time.RFC3339), "_", from.Email())
+	filename := fmt.Sprintf("%s_%s.eml", time.Now().UTC().Format(time.RFC3339), from.Email())
+	path := filepath.Join(f.path, filename)
 	return os.Create(path)
 }
 

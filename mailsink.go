@@ -70,7 +70,7 @@ func (e *env) Close() error {
 		}
 	}
 	fmt.Println(e.body.String())
-	if err := ioutil.WriteFile(e.filename(), e.body.Bytes(), 0644); err != nil {
+	if err := ioutil.WriteFile(e.filepath(), e.body.Bytes(), 0644); err != nil {
 		log.Panicln(err)
 		return err
 	}
